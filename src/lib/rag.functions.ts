@@ -26,7 +26,7 @@ export const answerQuestion = createServerFn({ method: "POST" })
     const res = await generateResponse({
       model: "openai/gpt-6-astra",
       instructions:
-        "You are a precise document question-answering assistant. Answer ONLY using the provided context excerpts. Cite excerpts inline like [1], [2]. If the answer is not in the context, say clearly that the documents don't contain that information. Write concise plain text without markdown symbols like ** or #; use simple dashes for lists. When the answer involves numbers that can be compared (amounts, counts, percentages, trends over time, breakdowns), also provide a chart using ONLY numbers found in the context: pick 'line' for trends over time, 'pie' for parts of a whole, otherwise 'bar'. Each series is a named numeric column; each point has a label and one value per series in the same order. If no chart fits, set chart to null.",
+        "You are a precise document question-answering assistant. Answer ONLY using the provided context excerpts. Cite excerpts inline like [1], [2]. If the answer is not in the context, say clearly that the documents don't contain that information. Write concise plain text without markdown symbols like ** or #; use simple dashes for lists. When the answer involves numbers that can be compared (amounts, counts, percentages, trends over time, breakdowns), also provide a chart using ONLY numbers found in the context: pick 'line' for trends over time, 'pie' for parts of a whole, otherwise 'bar'. Each series is a named numeric column; each point has a label and one value per series in the same order. If no chart fits, set chart to null. When a chart is provided, also write chartExplain: 2-3 short sentences in simple language explaining what the chart shows and the key takeaway, e.g. which item is highest or lowest, the overall trend, and what that means for the question. Use only numbers from the context. If chart is null, set chartExplain to an empty string.",
       input: `${hist ? `Conversation so far:\n${hist}\n\n` : ""}Context excerpts:\n${ctx}\n\nQuestion: ${data.question}\n\nReturn JSON.`,
       text: {
         format: {
@@ -36,7 +36,7 @@ export const answerQuestion = createServerFn({ method: "POST" })
           schema: {
             type: "object",
             additionalProperties: false,
-            required: ["answer", "chart"],
+            required: ["answer", "chart", "chartExplain"],
             properties: {
               answer: { type: "string" },
               chart: {
@@ -74,9 +74,12 @@ export const answerQuestion = createServerFn({ method: "POST" })
       .map((c: any) => c.text)
       .join("");
     try {
-      const parsed = JSON.parse(text) as { answer: string; chart: Chart | null };
+      const parsed = JSON.parse(text) as { answer: string; chart: Chart | null; chartExplain?: string };
       const chart = parsed.chart && parsed.chart.points.length > 0 && parsed.chart.series.length > 0 ? parsed.chart : null;
-      return { answer: parsed.answer || "No answer was produced.", chart };
+      return {
+        answer: parsed.answer || "No answer was produced.",
+        chart: chart ? { ...chart, explanation: (parsed.chartExplain || "").trim() || undefined } : null,
+      };
     } catch {
       return { answer: text || "No answer was produced.", chart: null as Chart | null };
     }
@@ -87,4 +90,5 @@ export type Chart = {
   title: string;
   series: string[];
   points: { label: string; values: number[] }[];
+  explanation?: string;
 };
