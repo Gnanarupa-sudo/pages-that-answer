@@ -77,9 +77,10 @@ export const answerQuestion = createServerFn({ method: "POST" })
     try {
       const parsed = JSON.parse(text) as { answer: string; chart: Chart | null; chartExplain?: string };
       const chart = parsed.chart && parsed.chart.points.length > 0 && parsed.chart.series.length > 0 ? parsed.chart : null;
+      const explain = (parsed.chartExplain || "").trim();
       return {
         answer: parsed.answer || "No answer was produced.",
-        chart: chart ? { ...chart, explanation: (parsed.chartExplain || "").trim() || undefined } : null,
+        chart: chart && explain ? { ...chart, explanation: explain } : chart ? { ...chart } : null,
       };
     } catch {
       return { answer: text || "No answer was produced.", chart: null as Chart | null };
