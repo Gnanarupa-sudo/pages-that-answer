@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { embedTexts, answerQuestion } from "@/lib/rag.functions";
+import type { Chart } from "@/lib/rag.functions";
+import { AnswerChart } from "@/components/AnswerChart";
 import { chunkText, cosine, extractText } from "@/lib/doc-parse";
 
 export const Route = createFileRoute("/")({
@@ -20,7 +22,7 @@ export const Route = createFileRoute("/")({
 
 type Chunk = { source: string; text: string; vec: number[] };
 type Doc = { name: string; chunks: number; status: "reading" | "ready" | "error"; error?: string };
-type Msg = { role: "user" | "assistant"; content: string; sources?: { source: string; text: string }[] };
+type Msg = { role: "user" | "assistant"; content: string; sources?: { source: string; text: string }[]; chart?: Chart | null };
 
 function Index() {
   const embed = useServerFn(embedTexts);
@@ -71,8 +73,8 @@ function Index() {
         .sort((a, b) => b.s - a.s)
         .slice(0, 8)
         .map(({ c }) => ({ source: c.source, text: c.text }));
-      const { answer } = await ask({ data: { question, contexts: top, history } });
-      setMsgs((m) => [...m, { role: "assistant", content: answer, sources: top }]);
+      const { answer, chart } = await ask({ data: { question, contexts: top, history } });
+      setMsgs((m) => [...m, { role: "assistant", content: answer, sources: top, chart }]);
     } catch {
       setMsgs((m) => [...m, { role: "assistant", content: "Something went wrong answering that. Please try again." }]);
     } finally {
@@ -121,6 +123,7 @@ function Index() {
               {msgs.map((m, i) => (
                 <div key={i} className={m.role === "user" ? "self-end max-w-[80%] rounded-2xl bg-primary text-primary-foreground px-4 py-3" : "self-start w-full"}>
                   <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
+                  {m.chart && <AnswerChart chart={m.chart} />}
                   {m.sources && (
                     <details className="mt-3 text-sm">
                       <summary className="cursor-pointer text-muted-foreground">Sources ({m.sources.length})</summary>
