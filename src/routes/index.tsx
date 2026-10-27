@@ -43,7 +43,7 @@ function Index() {
         for (let i = 0; i < chunks.length; i += 64) {
           const batch = chunks.slice(i, i + 64);
           const { vectors } = await embed({ data: { texts: batch } });
-          batch.forEach((t, j) => store.current.push({ source: file.name, text: t, vec: vectors[j] }));
+          batch.forEach((t, j) => store.current.push({ source: file.name, text: t, vec: vectors[j] ?? [] }));
         }
         upd({ status: "ready", chunks: chunks.length });
       } catch (e) {
@@ -67,7 +67,7 @@ function Index() {
     try {
       const { vectors } = await embed({ data: { texts: [question] } });
       const top = store.current
-        .map((c) => ({ c, s: cosine(vectors[0], c.vec) }))
+        .map((c) => ({ c, s: cosine(vectors[0] ?? [], c.vec) }))
         .sort((a, b) => b.s - a.s)
         .slice(0, 8)
         .map(({ c }) => ({ source: c.source, text: c.text }));

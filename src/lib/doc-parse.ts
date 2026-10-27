@@ -22,7 +22,7 @@ export async function extractText(file: File): Promise<string> {
   if (/\.(xlsx|xls|ods)$/.test(name)) {
     const XLSX = await import("xlsx");
     const wb = XLSX.read(await file.arrayBuffer());
-    return wb.SheetNames.map((s) => `Sheet: ${s}\n${XLSX.utils.sheet_to_csv(wb.Sheets[s])}`).join("\n\n");
+    return wb.SheetNames.map((s) => `Sheet: ${s}\n${XLSX.utils.sheet_to_csv(wb.Sheets[s]!)}`).join("\n\n");
   }
   if (/\.(html?|xml)$/.test(name)) {
     const doc = new DOMParser().parseFromString(await file.text(), "text/html");
@@ -51,6 +51,6 @@ export function chunkText(text: string, size = 1200, overlap = 200): string[] {
 
 export function cosine(a: number[], b: number[]) {
   let d = 0, na = 0, nb = 0;
-  for (let i = 0; i < a.length; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  for (let i = 0; i < a.length; i++) { const x = a[i]!, y = b[i]!; d += x * y; na += x * x; nb += y * y; }
   return d / (Math.sqrt(na) * Math.sqrt(nb) || 1);
 }
