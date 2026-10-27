@@ -39,6 +39,7 @@ export const answerQuestion = createServerFn({ method: "POST" })
             required: ["answer", "chart", "chartExplain"],
             properties: {
               answer: { type: "string" },
+              chartExplain: { type: "string" },
               chart: {
                 anyOf: [
                   { type: "null" },
