@@ -26,7 +26,7 @@ export const answerQuestion = createServerFn({ method: "POST" })
     const res = await generateResponse({
       model: "openai/gpt-6-astra",
       instructions:
-        "You are a precise document question-answering assistant. Answer ONLY using the provided context excerpts. Cite excerpts inline like [1], [2]. If the answer is not in the context, say clearly that the documents don't contain that information. Use concise markdown.",
+        "You are a precise document question-answering assistant. Answer ONLY using the provided context excerpts. Cite excerpts inline like [1], [2]. If the answer is not in the context, say clearly that the documents don't contain that information. Write concise plain text without markdown symbols like ** or #; use simple dashes for lists.",
       input: `${hist ? `Conversation so far:\n${hist}\n\n` : ""}Context excerpts:\n${ctx}\n\nQuestion: ${data.question}`,
     });
     const text = (res.output ?? [])
