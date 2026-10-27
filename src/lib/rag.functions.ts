@@ -81,3 +81,10 @@ export const answerQuestion = createServerFn({ method: "POST" })
       return { answer: text || "No answer was produced.", chart: null as Chart | null };
     }
   });
+
+export type Chart = {
+  type: "bar" | "line" | "pie";
+  title: string;
+  series: string[];
+  points: { label: string; values: number[] }[];
+};
