@@ -37,12 +37,6 @@ export function AnswerChart({ chart }: { chart: Chart }) {
           )}
         </ResponsiveContainer>
       </div>
-      {chart.explanation ? (
-        <div className="mt-3 border-t border-border pt-3">
-          <p className="text-sm font-medium text-foreground mb-1">What this chart shows</p>
-          <p className="text-sm text-muted-foreground leading-relaxed">{chart.explanation}</p>
-        </div>
-      ) : null}
     </figure>
   );
 }
