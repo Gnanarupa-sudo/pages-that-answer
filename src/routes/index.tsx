@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { embedTexts, answerQuestion } from "@/lib/rag.functions";
-import type { Chart } from "@/lib/rag.functions";
-import { AnswerChart } from "@/components/AnswerChart";
 import { chunkText, cosine, extractText } from "@/lib/doc-parse";
+import { loadAll, saveDoc, deleteDoc } from "@/lib/doc-store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -22,7 +21,17 @@ export const Route = createFileRoute("/")({
 
 type Chunk = { source: string; text: string; vec: number[] };
 type Doc = { name: string; chunks: number; status: "reading" | "ready" | "error"; error?: string };
-type Msg = { role: "user" | "assistant"; content: string; sources?: { source: string; text: string }[]; chart?: Chart | null };
+type Msg = { role: "user" | "assistant"; content: string; sources?: { source: string; text: string }[] };
+
+// Exact-term boost: questions about specific numbers/names buried in tables
+// often lose pure semantic search, so reward chunks containing question terms.
+function keywordBoost(question: string, text: string) {
+  const terms = question.toLowerCase().match(/[a-z0-9$%.,]{3,}/g) ?? [];
+  const hay = text.toLowerCase();
+  let hits = 0;
+  for (const t of terms) if (hay.includes(t)) hits++;
+  return terms.length ? hits / terms.length : 0;
+}
 
 function Index() {
   const embed = useServerFn(embedTexts);
@@ -33,6 +42,18 @@ function Index() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  // Restore previously saved documents on first load.
+  useEffect(() => {
+    loadAll()
+      .then(({ docs: savedDocs, chunks }) => {
+        store.current = chunks;
+        setDocs(savedDocs.map((d) => ({ name: d.name, chunks: d.chunks, status: "ready" as const })));
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
 
   async function addFiles(files: FileList | File[]) {
     for (const file of Array.from(files)) {
@@ -42,16 +63,25 @@ function Index() {
         const text = await extractText(file);
         const chunks = chunkText(text);
         if (!chunks.length) throw new Error("No readable text found");
+        const items: Chunk[] = [];
         for (let i = 0; i < chunks.length; i += 64) {
           const batch = chunks.slice(i, i + 64);
           const { vectors } = await embed({ data: { texts: batch } });
-          batch.forEach((t, j) => store.current.push({ source: file.name, text: t, vec: vectors[j] ?? [] }));
+          batch.forEach((t, j) => items.push({ source: file.name, text: t, vec: vectors[j] ?? [] }));
         }
+        store.current.push(...items);
+        await saveDoc({ name: file.name, chunks: chunks.length, addedAt: Date.now() }, items);
         upd({ status: "ready", chunks: chunks.length });
       } catch (e) {
         upd({ status: "error", error: e instanceof Error ? e.message : "Could not read file" });
       }
     }
+  }
+
+  async function removeDoc(name: string) {
+    store.current = store.current.filter((c) => c.source !== name);
+    setDocs((d) => d.filter((x) => x.name !== name));
+    await deleteDoc(name).catch(() => {});
   }
 
   async function submit(e: React.FormEvent) {
@@ -69,12 +99,12 @@ function Index() {
     try {
       const { vectors } = await embed({ data: { texts: [question] } });
       const top = store.current
-        .map((c) => ({ c, s: cosine(vectors[0] ?? [], c.vec) }))
+        .map((c) => ({ c, s: cosine(vectors[0] ?? [], c.vec) + 0.15 * keywordBoost(question, c.text) }))
         .sort((a, b) => b.s - a.s)
         .slice(0, 8)
         .map(({ c }) => ({ source: c.source, text: c.text }));
-      const { answer, chart } = await ask({ data: { question, contexts: top, history } });
-      setMsgs((m) => [...m, { role: "assistant", content: answer, sources: top, chart }]);
+      const { answer } = await ask({ data: { question, contexts: top, history } });
+      setMsgs((m) => [...m, { role: "assistant", content: answer, sources: top }]);
     } catch {
       setMsgs((m) => [...m, { role: "assistant", content: "Something went wrong answering that. Please try again." }]);
     } finally {
@@ -101,14 +131,26 @@ function Index() {
         </label>
         <ul className="flex flex-col gap-2">
           {docs.map((d) => (
-            <li key={d.name} className="rounded-md bg-card border border-border px-3 py-2 text-sm">
-              <div className="truncate font-medium">{d.name}</div>
-              <div className={`text-xs ${d.status === "error" ? "text-destructive" : "text-muted-foreground"}`}>
-                {d.status === "reading" ? "Reading & indexing…" : d.status === "error" ? d.error : `${d.chunks} passages indexed`}
+            <li key={d.name} className="rounded-md bg-card border border-border px-3 py-2 text-sm flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate font-medium">{d.name}</div>
+                <div className={`text-xs ${d.status === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+                  {d.status === "reading" ? "Reading & indexing…" : d.status === "error" ? d.error : `${d.chunks} passages indexed`}
+                </div>
               </div>
+              <button
+                onClick={() => removeDoc(d.name)}
+                aria-label={`Remove ${d.name}`}
+                className="text-muted-foreground hover:text-destructive text-xs shrink-0 mt-0.5"
+              >
+                Remove
+              </button>
             </li>
           ))}
         </ul>
+        {loaded && docs.length > 0 && (
+          <p className="text-xs text-muted-foreground">Documents are saved in this browser and survive refreshes.</p>
+        )}
       </aside>
 
       <main className="flex flex-col h-screen">
@@ -123,7 +165,6 @@ function Index() {
               {msgs.map((m, i) => (
                 <div key={i} className={m.role === "user" ? "self-end max-w-[80%] rounded-2xl bg-primary text-primary-foreground px-4 py-3" : "self-start w-full"}>
                   <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
-                  {m.chart && <AnswerChart chart={m.chart} />}
                   {m.sources && (
                     <details className="mt-3 text-sm">
                       <summary className="cursor-pointer text-muted-foreground">Sources ({m.sources.length})</summary>
