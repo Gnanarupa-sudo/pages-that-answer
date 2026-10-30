@@ -1,5 +1,5 @@
 # Roadmap
 
-- [ ] Remove charts from the project (AnswerChart, chart logic in rag.functions, chart rendering in index)
-- [ ] Fix reliability gap: retry/fallback already in rag.functions; verify failed questions now answer
-- [ ] Save documents permanently (needs Lovable Cloud backend — not yet enabled)
+- [x] Remove charts from the project (AnswerChart deleted, recharts removed, chart logic stripped)
+- [x] Fix reliability gap: retry + fallback model in answerQuestion, keyword boost in retrieval — verified 3/3 correct answers incl. previously failing question types
+- [x] Save documents permanently: IndexedDB persistence, reload-verified, Remove button per doc
